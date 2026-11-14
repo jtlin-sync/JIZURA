@@ -77,7 +77,7 @@ html[lang=en] .fields .field { overflow-wrap: anywhere; }
 html[lang=en] .easy-grid button, html[lang=en] .tabs button { white-space: normal; line-height: 1.2; }
 
 /* ---------- controls ---------- */
-input[type=text], input[type=number], input:not([type]), select, textarea {
+input[type=text], input[type=search], input[type=number], input:not([type]), select, textarea {
   background: var(--raised); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; min-width: 0;
 }
 input[type=number] { font-family: var(--mono); }
@@ -192,9 +192,10 @@ button.chip:hover { border-color: var(--amber); color: var(--text); }
 button.chip.is-forced { border-color: var(--amber); }
 button.chip[aria-pressed=true] { border-color: var(--cyan); color: var(--cyan); }
 .cut-pick { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 8px; max-height: min(42vh, 420px); overflow: auto; }
-.cut-pick-h { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; position: sticky; top: 0; background: var(--panel); z-index: 1; padding-bottom: 4px; }
-.cut-pick-h strong { font-size: 12px; }
-.cut-pick-h .muted { flex: 1; font-size: 11px; }
+.cut-pick-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; position: sticky; top: 0; background: var(--panel); z-index: 1; padding-bottom: 4px; }
+.cut-pick-h strong { flex: none; font-size: 12px; }
+.cut-pick-h input { flex: 0 1 220px; width: 220px; max-width: 100%; font-size: 12px; }
+.cut-pick-h .muted { flex: 1 1 100px; font-size: 11px; }
 .cut-pick .tech-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; padding: 0; min-height: 96px; }
 .cut-pick .tcard { cursor: pointer; width: 100%; text-align: left; }
 .cut-pick .tcard.is-on { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
@@ -595,10 +596,12 @@ button.small.primary { padding: 4px 12px; }
       <div id="cutPick" class="cut-pick pro-only" hidden>
         <div class="cut-pick-h">
           <strong id="cutPickTitle">Teknik</strong>
+          <input id="cutPickFilter" type="search" placeholder="Filter teknik berdasarkan nama" aria-label="Filter teknik berdasarkan nama" aria-controls="cutPickGrid" autocomplete="off">
           <span class="muted" id="cutPickHint">Ganti cut ini saja</span>
           <button type="button" id="cutPickAuto" class="ghost small">Otomatis</button>
           <button type="button" id="cutPickClose" class="ghost small" aria-label="Tutup">✕</button>
         </div>
+        <p id="cutPickEmpty" class="hint" role="status" hidden>Tidak ada teknik yang cocok</p>
         <div id="cutPickGrid" class="tech-grid checks"></div>
       </div>
     </section>
@@ -59101,7 +59104,7 @@ const CHIP_GROUPS = [
   ['layout', 'l', 'Layout'], ['enter', 'e', 'Masuk'], ['hold', 'h', 'Tahan'], ['exit', 'x', 'Keluar'],
   ['decor', '', 'Dekorasi'], ['treat', 't', 'Perlakuan'], ['bg', 'b', 'Latar'], ['cam', 'c', 'Kamera'], ['trans', 'c', 'Transisi'],
 ];
-const cutPick = { g: null, line: -1, k: -1 };
+const cutPick = { g: null, line: -1, k: -1, filters: {} };
 let lastCutIdx = -2;
 
 function lyricCutK(cut) {
@@ -59263,6 +59266,7 @@ function toggleCutPick(g, cut, k) {
   if (cutPick.g === g && cutPick.line === cut.line && cutPick.k === k) { closeCutPick(); updateCutInfo(); return; }
   cutPick.g = g; cutPick.line = cut.line; cutPick.k = k;
   $('cutPick').hidden = false;
+  $('cutPick').scrollTop = 0;
   fillCutPick();
   lastCutIdx = -2; updateCutInfo();
 }
@@ -59272,11 +59276,18 @@ function fillCutPick() {
   const meta = CHIP_GROUPS.find(x => x[0] === g);
   const cut = J.cutAt(S.plan, S.t);
   $('cutPickTitle').textContent = (meta ? meta[2] : g) + (cut ? ' · #' + String(cut.index + 1).padStart(2, '0') : '');
+  $('cutPickFilter').value = cutPick.filters[g] || '';
+  const q = $('cutPickFilter').value.trim().toLowerCase();
+  const matches = (key, name) => (name + ' ' + key).toLowerCase().includes(q);
   const cur = cut ? cutGroupVal(cut, g) : '';
   const forced = cutTechSlot(cutPick.line, cutPick.k)[g];
   const onKey = forced || cur;
+  grid.querySelectorAll('canvas').forEach(cv => {
+    if (previewObs) previewObs.unobserve(cv);
+    previewLive.delete(cv);
+  });
   grid.innerHTML = '';
-  if (g === 'decor' || g === 'trans') {
+  if ((g === 'decor' || g === 'trans') && matches('none', 'Tidak ada')) {
     const none = document.createElement('button');
     none.type = 'button';
     none.className = 'tcard' + (forced === 'none' ? ' is-on' : '');
@@ -59286,7 +59297,7 @@ function fillCutPick() {
   }
   const [W, H] = J.designSize(S.project.aspect || '16:9');
   const th = 80, tw = Math.max(72, Math.round(th * W / H));
-  const items = J.order(g).filter(key => J.registry(g)[key] && !J.registry(g)[key].special);
+  const items = techItems(g).filter(key => matches(key, J.registry(g)[key].name));
   items.forEach(key => {
     const def = J.registry(g)[key];
     const b = document.createElement('button');
@@ -59300,6 +59311,8 @@ function fillCutPick() {
     });
     grid.appendChild(b);
   });
+  grid.hidden = grid.childElementCount === 0;
+  $('cutPickEmpty').hidden = !grid.hidden;
   queueThumbs(grid);
 }
 
@@ -60302,6 +60315,12 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   const cutPickAuto = $('cutPickAuto'), cutPickClose = $('cutPickClose');
+  $('cutPickFilter').addEventListener('input', e => {
+    if (!cutPick.g) return;
+    cutPick.filters[cutPick.g] = e.target.value;
+    $('cutPick').scrollTop = 0;
+    fillCutPick();
+  });
   if (cutPickClose) cutPickClose.addEventListener('click', () => { closeCutPick(); updateCutInfo(); });
   if (cutPickAuto) cutPickAuto.addEventListener('click', () => {
     if (!cutPick.g) return;

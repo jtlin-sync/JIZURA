@@ -209,6 +209,7 @@ BODY = {
     '表示しない': 'Ẩn',
     '同じシードなら同じ構成になります。行ごとの「再抽選」「ロック」は左の行リストから。': 'Cùng một seed (Mã ngẫu nhiên) sẽ tạo ra thứ tự hiệu ứng giống nhau. Sắp xếp lại hoặc khóa từng câu từ danh sách bên trái.',
     '手法を名前で絞り込み': 'Lọc kỹ thuật theo tên',
+    '条件に一致する手法はありません': 'Không có kỹ thuật phù hợp',
     'グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。': 'Màn hình màu xanh lá cây và nền đen chỉ hiển thị văn bản và hiệu ứng màu trắng trên nền màu đồng nhất, không có mẫu nền, họa tiết giấy, hạt hoặc họa tiết. Xem trước cũng tuân theo cài đặt này. Sử dụng khóa màu (chroma key) cho màn hình xanh hoặc chế độ kết hợp khóa Màn hình / luma cho nền đen để có thể xếp lớp lên trên các video khác.',
     '曲を動画に含める': 'Đưa âm thanh vào video',
     '連番PNG（ZIP）': 'PNG theo thứ tự(ZIP)',

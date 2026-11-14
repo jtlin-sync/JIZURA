@@ -169,6 +169,7 @@ BODY = {
     'スタイル次第': 'Otomatis (sesuai gaya)', '常に表示': 'Selalu tampilkan', '表示しない': 'Sembunyikan',
     '同じシードなら同じ構成になります。行ごとの「再抽選」「ロック」は左の行リストから。': 'Seed yang sama akan menghasilkan susunan yang sama. Acak ulang atau kunci tiap baris dari daftar di sebelah kiri.',
     '手法を名前で絞り込み': 'Filter teknik berdasarkan nama',
+    '条件に一致する手法はありません': 'Tidak ada teknik yang cocok',
     'グリーンバック／ブラックバックにすると、白い文字と演出だけを単色の背景の上に描きます（背景の模様・紙の質感・粒子・周辺減光は入りません）。プレビューにもそのまま反映されます。グリーンバックは動画編集ソフトのクロマキーで、ブラックバックは「スクリーン」合成や輝度キーで抜いて、別の映像の上に重ねられます。': 'Green screen dan latar hitam hanya menampilkan teks putih dan efek di atas warna solid, tanpa pola latar, tekstur kertas, partikel, atau vignette. Pratinjau juga mengikuti pengaturan ini. Gunakan chroma key untuk green screen, atau mode campur Screen / luma key untuk latar hitam agar bisa ditumpuk di atas video lain.',
     '曲を動画に含める': 'Sertakan audio dalam video', '連番PNG（ZIP）': 'PNG berurutan (ZIP)',
     '透過PNG（ZIP・背景なし）': 'PNG transparan (ZIP, tanpa latar)',

@@ -434,7 +434,7 @@ const CHIP_GROUPS = [
   ['layout', 'l', 'レイアウト'], ['enter', 'e', '登場'], ['hold', 'h', '保持'], ['exit', 'x', '退場'],
   ['decor', '', '装飾'], ['treat', 't', '加工'], ['bg', 'b', '背景'], ['cam', 'c', 'カメラ'], ['trans', 'c', 'つなぎ'],
 ];
-const cutPick = { g: null, line: -1, k: -1 };
+const cutPick = { g: null, line: -1, k: -1, filters: {} };
 let lastCutIdx = -2;
 
 function lyricCutK(cut) {
@@ -596,6 +596,7 @@ function toggleCutPick(g, cut, k) {
   if (cutPick.g === g && cutPick.line === cut.line && cutPick.k === k) { closeCutPick(); updateCutInfo(); return; }
   cutPick.g = g; cutPick.line = cut.line; cutPick.k = k;
   $('cutPick').hidden = false;
+  $('cutPick').scrollTop = 0;
   fillCutPick();
   lastCutIdx = -2; updateCutInfo();
 }
@@ -605,11 +606,18 @@ function fillCutPick() {
   const meta = CHIP_GROUPS.find(x => x[0] === g);
   const cut = J.cutAt(S.plan, S.t);
   $('cutPickTitle').textContent = (meta ? meta[2] : g) + (cut ? ' · #' + String(cut.index + 1).padStart(2, '0') : '');
+  $('cutPickFilter').value = cutPick.filters[g] || '';
+  const q = $('cutPickFilter').value.trim().toLowerCase();
+  const matches = (key, name) => (name + ' ' + key).toLowerCase().includes(q);
   const cur = cut ? cutGroupVal(cut, g) : '';
   const forced = cutTechSlot(cutPick.line, cutPick.k)[g];
   const onKey = forced || cur;
+  grid.querySelectorAll('canvas').forEach(cv => {
+    if (previewObs) previewObs.unobserve(cv);
+    previewLive.delete(cv);
+  });
   grid.innerHTML = '';
-  if (g === 'decor' || g === 'trans') {
+  if ((g === 'decor' || g === 'trans') && matches('none', 'なし')) {
     const none = document.createElement('button');
     none.type = 'button';
     none.className = 'tcard' + (forced === 'none' ? ' is-on' : '');
@@ -619,7 +627,7 @@ function fillCutPick() {
   }
   const [W, H] = J.designSize(S.project.aspect || '16:9');
   const th = 80, tw = Math.max(72, Math.round(th * W / H));
-  const items = J.order(g).filter(key => J.registry(g)[key] && !J.registry(g)[key].special);
+  const items = techItems(g).filter(key => matches(key, J.registry(g)[key].name));
   items.forEach(key => {
     const def = J.registry(g)[key];
     const b = document.createElement('button');
@@ -633,6 +641,8 @@ function fillCutPick() {
     });
     grid.appendChild(b);
   });
+  grid.hidden = grid.childElementCount === 0;
+  $('cutPickEmpty').hidden = !grid.hidden;
   queueThumbs(grid);
 }
 
@@ -1635,6 +1645,12 @@ function bind() {
   $('tapStop').addEventListener('click', () => { pause(); stopTap(); });
   $('btnPlay').addEventListener('click', () => (S.playing ? pause() : play()));
   const cutPickAuto = $('cutPickAuto'), cutPickClose = $('cutPickClose');
+  $('cutPickFilter').addEventListener('input', e => {
+    if (!cutPick.g) return;
+    cutPick.filters[cutPick.g] = e.target.value;
+    $('cutPick').scrollTop = 0;
+    fillCutPick();
+  });
   if (cutPickClose) cutPickClose.addEventListener('click', () => { closeCutPick(); updateCutInfo(); });
   if (cutPickAuto) cutPickAuto.addEventListener('click', () => {
     if (!cutPick.g) return;
