@@ -506,6 +506,48 @@ function pickEnabledTech(g, opts) {
   if (!keys.length) return '';
   return keys[(Math.random() * keys.length) | 0];
 }
+function offsetResetCopy() {
+  const lang = (document.documentElement.lang || 'ja').toLowerCase();
+  const copy = {
+    ja: ['位置を中央へ', 'このカットの水平・垂直の位置ずれをゼロにします', '位置ずれはゼロです', 'このレイアウトには位置ずれがありません', 'このカットの位置ずれをゼロにしました'],
+    en: ['Clear offset', 'Reset this cut’s horizontal and vertical position offsets', 'Position offsets are already zero', 'This layout has no position offsets', 'Cleared this cut’s position offsets'],
+    'zh-hans': ['清空偏移', '清空当前编排的水平和垂直位置偏移', '当前编排的位置偏移已归零', '当前布局没有可清空的位置偏移', '已清空当前编排的位置偏移'],
+    'zh-hant': ['清除偏移', '清除目前片段的水平與垂直位置偏移', '目前片段的位置偏移已歸零', '目前版面沒有可清除的位置偏移', '已清除目前片段的位置偏移'],
+    ko: ['위치 초기화', '이 컷의 가로 및 세로 위치 오프셋 초기화', '위치 오프셋이 이미 0입니다', '이 레이아웃에는 위치 오프셋이 없습니다', '이 컷의 위치 오프셋을 초기화했습니다'],
+    id: ['Hapus offset', 'Atur ulang offset posisi horizontal dan vertikal potongan ini', 'Offset posisi sudah nol', 'Tata letak ini tidak memiliki offset posisi', 'Offset posisi potongan ini dihapus'],
+    vi: ['Xóa độ lệch', 'Đặt lại độ lệch vị trí ngang và dọc của cảnh này', 'Độ lệch vị trí đã bằng không', 'Bố cục này không có độ lệch vị trí', 'Đã xóa độ lệch vị trí của cảnh này'],
+  };
+  return copy[lang] || copy.ja;
+}
+function offsetAxes(cut) {
+  return ['ox', 'oy'].filter(axis => cut && cut.params && Number.isFinite(cut.params[axis]));
+}
+function resetCurrentCutOffset() {
+  if (S.exporting || S.tap) return;
+  const cut = J.cutAt(S.plan, S.t), k = lyricCutK(cut);
+  if (!cut || k < 0 || !offsetAxes(cut).some(axis => cut.params[axis] !== 0)) return;
+  const time = S.t;
+  remember();
+  setCutTech(cut.line, k, 'zeroOffset', cut.layout);
+  replan(); commit(); flushSave(); seek(time);
+  toast(offsetResetCopy()[4]);
+}
+function updateOffsetResetButton(group, cut) {
+  let button = $('cutPickResetOffset');
+  if (!button) {
+    const anchor = $('cutPickAuto'); if (!anchor) return;
+    button = document.createElement('button');
+    button.id = 'cutPickResetOffset'; button.type = 'button'; button.className = 'ghost small';
+    button.addEventListener('click', resetCurrentCutOffset);
+    anchor.insertAdjacentElement('beforebegin', button);
+  }
+  const copy = offsetResetCopy(), axes = offsetAxes(cut);
+  const changed = axes.some(axis => cut.params[axis] !== 0);
+  button.textContent = copy[0]; button.hidden = group !== 'layout';
+  button.disabled = !cut || lyricCutK(cut) < 0 || !changed || !!S.exporting || !!S.tap;
+  button.title = !axes.length ? copy[3] : !changed ? copy[2] : copy[1];
+  button.setAttribute('aria-label', copy[1]);
+}
 function rerollCurrentCut(kind) {
   if (S.exporting || S.tap) return;
   const cut = J.cutAt(S.plan, S.t);
@@ -605,6 +647,7 @@ function fillCutPick() {
   if (!g || !grid) return;
   const meta = CHIP_GROUPS.find(x => x[0] === g);
   const cut = J.cutAt(S.plan, S.t);
+  updateOffsetResetButton(g, cut);
   $('cutPickTitle').textContent = (meta ? meta[2] : g) + (cut ? ' · #' + String(cut.index + 1).padStart(2, '0') : '');
   $('cutPickFilter').value = cutPick.filters[g] || '';
   const q = $('cutPickFilter').value.trim().toLowerCase();
@@ -917,6 +960,7 @@ function setCutTech(i, k, group, key) {
   const cutTech = Object.assign({}, cur.cutTech || {});
   const slot = Object.assign({}, cutTech[k] || cutTech[String(k)] || {});
   delete cutTech[String(k)];
+  if (group === 'layout') delete slot.zeroOffset;
   if (!key) delete slot[group];
   else slot[group] = key;
   if (Object.keys(slot).length) cutTech[k] = slot;

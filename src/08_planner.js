@@ -374,7 +374,7 @@ J.plan = (project, audio) => {
     let nC = Math.round(D / L);
     const maxC = chunks.length + (chunks.length >= 2 && D > 2.0 ? 1 : 0);
     nC = J.clamp(nC, 1, Math.max(1, maxC));
-    const ovAny = Object.keys(ov).some(k2 => !['lock', 'lockedSeed', 'seed', 'cutTech', 'cutLayouts', 'cutQuiet', 'cutTime'].includes(k2));
+    const ovAny = Object.keys(ov).some(k2 => !['lock', 'lockedSeed', 'seed', 'cutTech', 'cutLayouts', 'cutQuiet', 'cutTime', 'fillToNext'].includes(k2));
     const kime = !!(U && U.kime.has(li) && !ov.cuts);
     if (ov.single || kime) nC = 1;
     if (zones) nC = Math.max(1, Math.min(nC, Math.floor(chunks.length / 2)));   // 中央を空ける: each cut is split in two, so keep ≥ 2 words per cut
@@ -566,6 +566,14 @@ J.plan = (project, audio) => {
       if (morph) cut.morph = morph;
       if (UU) UU.remember(li, k, txt, cut);
       if (zones) splitCut(cut, halves, zones, st, dur, LS);
+      // A per-cut position reset runs after layout generation, including locked and split cuts.
+      if (tech.zeroOffset === layout) {
+        for (const part of [cut, cut.companion].filter(Boolean)) {
+          const position = Object.assign({}, part.params);
+          for (const axis of ['ox', 'oy']) if (Number.isFinite(position[axis])) position[axis] = 0;
+          part.params = position;
+        }
+      }
       // 文字整列: effects don't pile up — one decoration, no text treatment on top of it
       if (plan.typeset) { cut.decor = cut.decor.slice(0, 1); if (cut.decor.length && cut.treat !== 'none') { cut.treat = 'none'; cut.treatP = {}; } }
       plan.cuts.push(cut);
@@ -614,6 +622,19 @@ J.plan = (project, audio) => {
       plan.cuts.push(makeCut({ text: title || '', lineText: '', line: li, start: visEnd, end: nextStart, layout: 'interlude', enter: 'blur', exit: 'blur', hold: 'still', inDur: 0.3, outDur: 0.3, params: J.LAYOUTS.interlude.plan(r2), decor: pickDecor(r2, st, en, Object.assign({}, fx, { decor: 1 }), 'interlude'), scheme: schemeIdx, seed: J.h(lineSeed, 405) }));
     }
   });
+  // Local compatibility: fill a requested lyric tail after all random planning is complete.
+  // This preserves the layouts and random streams of every other line.
+  const fillLines = plan.lines.filter(ln => !ln.interlude && ((project.overrides || {})[ln.index] || {}).fillToNext === true);
+  if (fillLines.length) {
+    const fillIds = new Set(fillLines.map(ln => ln.index));
+    plan.cuts = plan.cuts.filter(c => !(fillIds.has(c.line) && c.layout === 'interlude' && c.utext == null));
+    for (const ln of fillLines) {
+      const last = plan.cuts.filter(c => c.line === ln.index && c.utext != null).at(-1);
+      if (!last || last.end >= ln.end) continue;
+      last.end = ln.end; last.dur = last.end - last.start; ln.visEnd = ln.end;
+      if (last.companion) { last.companion.end = ln.end; last.companion.dur = ln.end - last.companion.start; }
+    }
+  }
   plan.cuts.sort((a, b) => a.start - b.start);
   plan.cuts.forEach((c, i) => {
     c.index = i;
