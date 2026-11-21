@@ -26,6 +26,18 @@ must not collide with existing keys (check `J.order(group)`). `name` (Japanese, 
 `tags` = moods it suits, any of: `glitch calm pop graphic editorial emotional horror` (`horror` only for the horror set). `w` = base pick weight (1 normal; 0.4–0.7 for
 gimmicky / very specific looks; 1.2–1.5 for strong general-purpose ones).
 
+### Selectable layout forms
+
+A layout can expose its discrete forms beside the cut picker's position reset with
+`forms: { param: 'variant', values: ['rows', 'columns'] }`. The ordered values give stable Form 1 / Form 2 labels;
+store the value in `plan()`'s params as usual. Existing layouts are catalogued in `src/11r_layout_forms.js`.
+Optional `allowed(value, context)` disables forms for unsupported text or aspect ratios, and `current(context)`
+reports a render-time fallback. The context contains `text`, `n`, `W`, `H`, `dur` and `params`, using the cut's side-band
+dimensions when applicable. If a form changes dependent data such as text grouping, add `formParams(params, context)`
+to the layout and return those additional parameter fields. This must not re-roll fonts, colours or other random settings.
+Manual choices live in `overrides[line].cutTech[k].layoutForm = { layout, value }`; they apply after generation and locked
+snapshots, to both halves of a split scene, without changing the random stream. Run `node tools/test_layout_forms.js`.
+
 ## Design space & environment
 
 Design size by aspect: 16:9 1920×1080 · 9:16 1080×1920 · 4:3 1440×1080 · 3:4 1080×1440 · 1:1 1440×1440 · 4:5 1440×1800 · 21:9 2520×1080.

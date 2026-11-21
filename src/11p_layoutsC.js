@@ -2352,15 +2352,20 @@ function lantern(env, cx, top, lw, lh, bodyC, a, glow, flick) {
   env.rrect(cx - lw * 0.33, y1 - capH * 0.05, lw * 0.66, capH * 1.05, capH * 0.2, capC, a, false);
   return { y0, y1, bh, hw };
 }
+const chochinUnits = (cut, variant) => {
+  const n = cut.n;
+  return variant === 'row' ? (hasLatin(cut.text) ? splitK(cut.text, 6) : n <= 6 ? charUnits(cut.text) : splitK(cut.text, Math.min(6, Math.ceil(n / 2)), Math.min(6, Math.ceil(n / 2)))) : [hasLatin(cut.text) ? flat(cut.text) : strip(cut.text)];
+};
 reg('chochin', {
   name: '提灯', tags: ['emotional', 'calm', 'pop'], w: 0.7, ae: 'circle', treat: 'safe', fits: n => n >= 1 && n <= 12, portrait: 1.1,
   enterBias: { blur: 1.4, flicker: 1.4, cut: 1.2, slice: 0.4 },
   plan: (rng, cut, st) => {
     const n = cut.n;
     const variant = n <= 6 && !hasLatin(cut.text) ? rng.pick(['single', 'single', 'row']) : 'row';
-    const units = variant === 'row' ? (hasLatin(cut.text) ? splitK(cut.text, 6) : n <= 6 ? charUnits(cut.text) : splitK(cut.text, Math.min(6, Math.ceil(n / 2)), Math.min(6, Math.ceil(n / 2)))) : [hasLatin(cut.text) ? flat(cut.text) : strip(cut.text)];
+    const units = chochinUnits(cut, variant);
     return { font: rng.pick(fontsOf(st, ['display', 'serif'])), variant, units, body: rng.pick(['accent', 'accent', 'paper']), ph: rng.range(0, 6) };
   },
+  formParams: (params, cut) => ({ units: chochinUnits(cut, params.variant) }),
   render(env) {
     const { W, H, sc, ctx } = env, p = env.cut.params, u = U(env), port = isPort(env);
     const out = tout(env);

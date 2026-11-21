@@ -548,6 +548,63 @@ function updateOffsetResetButton(group, cut) {
   button.title = !axes.length ? copy[3] : !changed ? copy[2] : copy[1];
   button.setAttribute('aria-label', copy[1]);
 }
+function layoutFormCopy() {
+  const lang = (document.documentElement.lang || 'ja').toLowerCase();
+  const copy = {
+    ja: ['レイアウトの形式', '形式 {n}', '自動 · 形式 {n}', '標準の形式', 'このカットのレイアウトの形式を切り替えます', 'この文字数・画面比では選べません', '自動'],
+    en: ['Layout form', 'Form {n}', 'Auto · Form {n}', 'Default form', 'Change the layout form for this cut', 'Unavailable for this text or aspect ratio', 'Auto'],
+    'zh-hans': ['布局形式', '形式 {n}', '自动 · 形式 {n}', '默认形式', '切换当前编排的布局形式', '此形式不适用于当前文字或画面比例', '自动'],
+    'zh-hant': ['版面形式', '形式 {n}', '自動 · 形式 {n}', '預設形式', '切換目前片段的版面形式', '此形式不適用於目前文字或畫面比例', '自動'],
+    ko: ['레이아웃 형식', '형식 {n}', '자동 · 형식 {n}', '기본 형식', '이 컷의 레이아웃 형식 변경', '현재 텍스트 또는 화면 비율에서 사용할 수 없습니다', '자동'],
+    id: ['Bentuk tata letak', 'Bentuk {n}', 'Otomatis · Bentuk {n}', 'Bentuk bawaan', 'Ubah bentuk tata letak potongan ini', 'Tidak tersedia untuk teks atau rasio layar ini', 'Otomatis'],
+    vi: ['Dạng bố cục', 'Dạng {n}', 'Tự động · Dạng {n}', 'Dạng mặc định', 'Đổi dạng bố cục cho cảnh này', 'Không có sẵn cho văn bản hoặc tỷ lệ khung hình này', 'Tự động'],
+  };
+  return copy[lang] || copy.ja;
+}
+function changeCurrentLayoutForm(e) {
+  if (S.exporting || S.tap || cutPick.g !== 'layout') return;
+  const cut = J.cutAt(S.plan, S.t), k = lyricCutK(cut), value = e.target.value;
+  const state = J.layoutFormState(cut, S.plan);
+  if (!cut || k < 0 || !state || value && !state.options.some(o => o.value === value && o.enabled)) return;
+  const time = S.t;
+  remember();
+  setCutTech(cut.line, k, 'layoutForm', value ? { layout: cut.layout, value } : '');
+  replan(); commit(); flushSave(); seek(time);
+}
+function updateLayoutFormSelect(group, cut) {
+  let select = $('cutPickLayoutForm'), controls = $('cutPickLayoutControls');
+  if (!select) {
+    const reset = $('cutPickResetOffset'); if (!reset) return;
+    controls = document.createElement('span');
+    controls.id = 'cutPickLayoutControls'; controls.className = 'cut-layout-controls';
+    reset.insertAdjacentElement('beforebegin', controls);
+    select = document.createElement('select'); select.id = 'cutPickLayoutForm';
+    select.addEventListener('change', changeCurrentLayoutForm);
+    controls.appendChild(select); controls.appendChild(reset);
+  }
+  controls.hidden = group !== 'layout';
+  if (controls.hidden) return;
+  const copy = layoutFormCopy(), k = lyricCutK(cut);
+  const state = J.layoutFormState(cut, S.plan);
+  select.setAttribute('aria-label', copy[0]); select.title = copy[4];
+  select.replaceChildren();
+  const option = (value, label, enabled = true) => {
+    const item = document.createElement('option'); item.value = value; item.textContent = label;
+    item.disabled = !enabled; if (!enabled) item.title = copy[5];
+    select.appendChild(item);
+  };
+  const forced = cut && k >= 0 ? cutTechSlot(cut.line, k).layoutForm : null;
+  const manual = state && forced && forced.layout === cut.layout && forced.value === state.value
+    && state.options.some(o => o.value === forced.value && o.enabled);
+  if (state) {
+    const current = state.options.find(o => o.value === state.value);
+    option('', manual ? copy[6] : copy[2].replace('{n}', current.number));
+    state.options.forEach(o => option(o.value, copy[1].replace('{n}', o.number), o.enabled));
+    select.value = manual ? state.value : '';
+  } else option('', copy[3]);
+  select.classList.toggle('is-forced', !!manual);
+  select.disabled = !state || k < 0 || !!S.exporting || !!S.tap || !manual && state.options.filter(o => o.enabled).length < 2;
+}
 function rerollCurrentCut(kind) {
   if (S.exporting || S.tap) return;
   const cut = J.cutAt(S.plan, S.t);
@@ -648,6 +705,7 @@ function fillCutPick() {
   const meta = CHIP_GROUPS.find(x => x[0] === g);
   const cut = J.cutAt(S.plan, S.t);
   updateOffsetResetButton(g, cut);
+  updateLayoutFormSelect(g, cut);
   $('cutPickTitle').textContent = (meta ? meta[2] : g) + (cut ? ' · #' + String(cut.index + 1).padStart(2, '0') : '');
   $('cutPickFilter').value = cutPick.filters[g] || '';
   const q = $('cutPickFilter').value.trim().toLowerCase();
@@ -960,7 +1018,10 @@ function setCutTech(i, k, group, key) {
   const cutTech = Object.assign({}, cur.cutTech || {});
   const slot = Object.assign({}, cutTech[k] || cutTech[String(k)] || {});
   delete cutTech[String(k)];
-  if (group === 'layout') delete slot.zeroOffset;
+  if (group === 'layout') {
+    delete slot.zeroOffset;
+    if (!key || !slot.layoutForm || slot.layoutForm.layout !== key) delete slot.layoutForm;
+  }
   if (!key) delete slot[group];
   else slot[group] = key;
   if (Object.keys(slot).length) cutTech[k] = slot;
