@@ -43,6 +43,21 @@ const styles = {
   tzDetail: 'solid accent outline',
 };
 for (const [key, values] of Object.entries(styles)) define(key, 'style', values);
+// Centre has a boolean underline parameter; store stable string choices in projects.
+define('center', 'under', 'withLine withoutLine', {
+  current: c => c.params.under ? 'withLine' : 'withoutLine',
+  parse: value => value === 'withLine',
+  labels: {
+    ja: ['横線あり', '横線なし'],
+    en: ['With line', 'Without line'],
+    'zh-hans': ['有横线', '无横线'],
+    'zh-hant': ['有橫線', '無橫線'],
+    ko: ['밑줄 있음', '밑줄 없음'],
+    id: ['Dengan garis', 'Tanpa garis'],
+    vi: ['Có gạch dưới', 'Không gạch dưới'],
+  },
+});
+
 define('ring', 'orient', 'tangent upright');
 define('elastic', 'orient', 'h v diag');
 define('splitScreen', 'split', 'v h diag');
@@ -91,7 +106,8 @@ J.applyLayoutForm = (cut, plan, choice) => {
   if (!state || !state.options.some(o => o.value === choice.value && o.enabled)) return;
   const def = J.LAYOUTS[cut.layout];
   for (const part of partsOf(cut)) {
-    const params = Object.assign({}, part.params, { [def.forms.param]: choice.value });
+    const value = def.forms.parse ? def.forms.parse(choice.value) : choice.value;
+    const params = Object.assign({}, part.params, { [def.forms.param]: value });
     if (def.formParams) Object.assign(params, def.formParams(params, context(part, plan)));
     part.params = params;
   }

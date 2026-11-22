@@ -31,7 +31,7 @@ for (const [key, def] of Object.entries(J.LAYOUTS)) {
     const [W, H] = J.designSize(aspect);
     for (const seed of [1, 42, 93]) {
       const params = def.plan(J.rng(seed), { text, n: J.glyphCount(text), W, H, dur: 2 }, J.resolveStyle(project()));
-      assert.ok(def.forms.values.includes(params[def.forms.param]), key + ' missing value ' + params[def.forms.param]);
+      assert.ok(def.forms.values.some(v => (def.forms.parse ? def.forms.parse(v) : v) === params[def.forms.param]), key + ' missing value ' + params[def.forms.param]);
       const cut = { layout: key, text, params, dur: 2 };
       const state = J.layoutFormState(cut, { W, H });
       assert.ok(state && state.options.length === def.forms.values.length, key + ' missing state');
@@ -97,5 +97,39 @@ assert.equal(cutOf(J.plan(portrait)).params.variant, portCut.params.variant, 'un
 const offset = project('circle');
 offset.overrides[0].cutTech = { 0: { layoutForm: { layout: 'circle', value: 'ring' }, zeroOffset: 'circle' } };
 assert.equal(cutOf(J.plan(offset)).params.variant, 'ring', 'offset reset removed the selected form');
-assert.equal(J.layoutFormState({ layout: 'center', text: '春', params: {} }, { W: 1920, H: 1080 }), null);
+// Centre's line choice changes only the boolean flag and survives saves, locks and rerolls.
+const centre = project('center'), centreBefore = J.plan(centre), firstCentre = cutOf(centreBefore);
+for (const value of ['withLine', 'withoutLine', 'withLine']) {
+  force(centre, value);
+  const changedPlan = J.plan(clone(centre)), current = cutOf(changedPlan);
+  const expected = clone(firstCentre); expected.params.under = value === 'withLine';
+  assert.deepEqual(clone(current), expected, 'centre form changed another cut setting');
+  assert.deepEqual(clone(changedPlan.cuts.filter(c => c.line !== 0)), clone(centreBefore.cuts.filter(c => c.line !== 0)), 'centre form changed other cuts');
+  assert.deepEqual(clone(changedPlan.events), clone(centreBefore.events), 'centre form changed events');
+  assert.equal(J.layoutFormState(current, changedPlan).value, value, 'centre form did not round trip');
+}
+delete centre.overrides[0].cutTech;
+assert.deepEqual(clone(J.plan(centre)), clone(centreBefore), 'centre auto did not restore the original plan');
+for (const value of ['withLine', 'withoutLine']) {
+  force(centre, value);
+  centre.seed++;
+  assert.equal(cutOf(J.plan(centre)).params.under, value === 'withLine', 'centre reroll lost choice');
+}
+const lockedCentre = project('center'), lockedCentrePlan = J.plan(lockedCentre);
+lockedCentre.overrides[0].lock = true;
+lockedCentre.overrides[0].lockedSeed = lockedCentrePlan.lines[0].seed;
+lockedCentre.overrides[0].lockedCuts = J.lineSnapshot(lockedCentrePlan, 0);
+const lockedSnapshot = clone(lockedCentre.overrides[0].lockedCuts);
+for (const value of ['withLine', 'withoutLine']) {
+  force(lockedCentre, value);
+  assert.equal(cutOf(J.plan(lockedCentre)).params.under, value === 'withLine', 'locked centre ignored choice');
+}
+assert.deepEqual(clone(lockedCentre.overrides[0].lockedCuts), lockedSnapshot, 'centre mutated locked snapshot');
+const splitCentre = project('center'); splitCentre.centerFree = true;
+for (const value of ['withLine', 'withoutLine']) {
+  force(splitCentre, value);
+  const cut = cutOf(J.plan(splitCentre));
+  assert.equal(cut.params.under, value === 'withLine');
+  assert.equal(cut.companion.params.under, value === 'withLine', 'split centre did not share line choice');
+}
 console.log(`OK: ${count} layouts; forms, isolation, persistence, locks, text, split scenes, constraints and reset compatibility`);

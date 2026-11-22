@@ -598,8 +598,11 @@ function updateLayoutFormSelect(group, cut) {
     && state.options.some(o => o.value === forced.value && o.enabled);
   if (state) {
     const current = state.options.find(o => o.value === state.value);
-    option('', manual ? copy[6] : copy[2].replace('{n}', current.number));
-    state.options.forEach(o => option(o.value, copy[1].replace('{n}', o.number), o.enabled));
+    const form = J.LAYOUTS[cut.layout].forms, lang = (document.documentElement.lang || 'ja').toLowerCase();
+    const labels = form.labels && (form.labels[lang] || form.labels.ja);
+    const label = o => labels && labels[o.number - 1] || copy[1].replace('{n}', o.number);
+    option('', manual ? copy[6] : labels ? copy[6] + ' · ' + label(current) : copy[2].replace('{n}', current.number));
+    state.options.forEach(o => option(o.value, label(o), o.enabled));
     select.value = manual ? state.value : '';
   } else option('', copy[3]);
   select.classList.toggle('is-forced', !!manual);
