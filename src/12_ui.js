@@ -298,6 +298,7 @@ function play() {
 function pause() {
   S.playing = false; AP.stop();
   $('btnPlay').textContent = '▶'; $('btnPlay').setAttribute('aria-label', '再生'); S.need = true;
+  kickPreviewLoop();
 }
 function seek(t) {
   S.t = J.clamp(t, 0, Math.max(0, S.plan.duration - 1e-3));
@@ -1475,6 +1476,7 @@ function ensurePreviewObs() {
       const cv = e.target;
       if (e.isIntersecting && e.intersectionRatio > 0) {
         previewLive.add(cv);
+        // Even during playback, newly visible cards get one still so they never stay blank.
         if (!cv.dataset.ready && cv.dataset.g && cv.dataset.k) paintTechCanvas(cv, cv.dataset.g, cv.dataset.k, previewTime(getPreviewPlan(cv.dataset.g, cv.dataset.k), cv.dataset.g, now));
       } else previewLive.delete(cv);
     });
@@ -1488,10 +1490,11 @@ function resetPreviewWatch() {
 }
 function watchThumb(cv) { ensurePreviewObs().observe(cv); }
 function kickPreviewLoop() {
-  if (previewRaf) return;
+  // Give the PV the main thread while it plays; pause() resumes thumbnail animation.
+  if (previewRaf || S.playing) return;
   const tick = (now) => {
     previewRaf = 0;
-    if (document.hidden || S.exporting || !techPaneOpen() || !previewLive.size) return;
+    if (S.playing || document.hidden || S.exporting || !techPaneOpen() || !previewLive.size) return;
     if (now - previewLast >= 70) {
       previewLast = now;
       for (const cv of previewLive) {
