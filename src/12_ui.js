@@ -608,6 +608,61 @@ function updateLayoutFormSelect(group, cut) {
   select.classList.toggle('is-forced', !!manual);
   select.disabled = !state || k < 0 || !!S.exporting || !!S.tap || !manual && state.options.filter(o => o.enabled).length < 2;
 }
+function layoutFontCopy() {
+  const lang = (document.documentElement.lang || 'ja').toLowerCase().split('-')[0];
+  const code = (document.documentElement.lang || 'ja').toLowerCase();
+  const copy = {
+    ja: ['カットのフォント', '自動', '混植', 'このカットのレイアウトのフォントを統一します。手動選択時は太さを固定します', '太さアニメーション', 'フォントなし'],
+    en: ['Layout font', 'Auto', 'Mixed fonts', 'Use one font for this cut’s layout. Manual selection uses a fixed weight', 'Animated weight', 'No layout font'],
+    'zh-hans': ['布局字体', '自动', '混合字体', '统一当前镜头布局的字体，手动选择时固定字重', '字重渐变', '无布局字体'],
+    'zh-hant': ['版面字體', '自動', '混合字體', '統一目前片段版面的字體，手動選擇時固定字重', '字重漸變', '無版面字體'],
+    ko: ['레이아웃 글꼴', '자동', '혼합 글꼴', '이 컷의 레이아웃에 한 글꼴을 사용합니다. 수동 선택 시 굵기가 고정됩니다', '굵기 애니메이션', '레이아웃 글꼴 없음'],
+    id: ['Font tata letak', 'Otomatis', 'Campuran font', 'Gunakan satu font untuk tata letak potongan ini. Pilihan manual memakai ketebalan tetap', 'Animasi ketebalan', 'Tanpa font tata letak'],
+    vi: ['Phông bố cục', 'Tự động', 'Nhiều phông', 'Dùng một phông cho bố cục cảnh này. Chọn thủ công sẽ cố định độ đậm', 'Độ đậm động', 'Không có phông bố cục'],
+  };
+  return copy[code] || copy[lang] || copy.ja;
+}
+function changeCurrentLayoutFont(e) {
+  if (S.exporting || S.tap || cutPick.g !== 'layout') return;
+  const cut = J.cutAt(S.plan, S.t), k = lyricCutK(cut), value = e.target.value;
+  if (!cut || k < 0 || !J.layoutFontState(cut) || value && !J.isLayoutFont(value)) return;
+  if ((cutTechSlot(cut.line, k).layoutFont || '') === value) return;
+  const time = S.t;
+  remember();
+  setCutTech(cut.line, k, 'layoutFont', value);
+  replan(); commit(); flushSave(); seek(time);
+}
+function updateLayoutFontSelect(group, cut) {
+  let select = $('cutPickLayoutFont');
+  if (!select) {
+    const form = $('cutPickLayoutForm'); if (!form) return;
+    select = document.createElement('select'); select.id = 'cutPickLayoutFont';
+    select.addEventListener('change', changeCurrentLayoutFont);
+    form.insertAdjacentElement('beforebegin', select);
+  }
+  if (group !== 'layout') return;
+  // Thumbnails can temporarily change J.lang; labels belong to the active plan.
+  const lang = S.plan.lang, copy = layoutFontCopy(), state = J.layoutFontState(cut, lang), k = lyricCutK(cut);
+  const forced = cut && k >= 0 ? cutTechSlot(cut.line, k).layoutFont : '';
+  const manual = state && J.isLayoutFont(forced) && state.keys.every(key => key === forced);
+  const current = state ? (state.labels.length > 1 ? copy[2] : state.labels[0]) + (state.variable ? ' · ' + copy[4] : '') : copy[5];
+  select.setAttribute('aria-label', copy[0]);
+  select.title = copy[3] + (state ? '\n' + state.labels.join(' / ') + (state.variable ? ' · ' + copy[4] : '') : '');
+  select.replaceChildren();
+  const option = (value, label, title) => {
+    const item = document.createElement('option'); item.value = value; item.textContent = label;
+    if (title) item.title = title;
+    select.appendChild(item);
+  };
+  option('', manual ? copy[1] : copy[1] + ' · ' + current);
+  for (const [key, font] of Object.entries(J.FONTS)) {
+    const face = J.faceOf ? J.faceOf(key, lang) : font;
+    option(key, face.label, face.label === font.label ? '' : font.label);
+  }
+  select.value = manual ? forced : '';
+  select.classList.toggle('is-forced', !!manual);
+  select.disabled = !state || k < 0 || !!S.exporting || !!S.tap;
+}
 function rerollCurrentCut(kind) {
   if (S.exporting || S.tap) return;
   const cut = J.cutAt(S.plan, S.t);
@@ -709,6 +764,7 @@ function fillCutPick() {
   const cut = J.cutAt(S.plan, S.t);
   updateOffsetResetButton(g, cut);
   updateLayoutFormSelect(g, cut);
+  updateLayoutFontSelect(g, cut);
   $('cutPickTitle').textContent = (meta ? meta[2] : g) + (cut ? ' · #' + String(cut.index + 1).padStart(2, '0') : '');
   $('cutPickFilter').value = cutPick.filters[g] || '';
   const q = $('cutPickFilter').value.trim().toLowerCase();

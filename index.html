@@ -196,8 +196,9 @@ button.chip[aria-pressed=true] { border-color: var(--cyan); color: var(--cyan); 
 .cut-pick-h strong { flex: none; font-size: 12px; }
 .cut-pick-h input { flex: 0 1 220px; width: 220px; max-width: 100%; font-size: 12px; }
 .cut-pick-h .muted { flex: 1 1 100px; font-size: 11px; }
-.cut-layout-controls { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+.cut-layout-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
 .cut-layout-controls select { width: auto; min-width: 100px; max-width: 190px; padding: 3px 4px; font-size: 12px; }
+#cutPickLayoutFont { min-width: 0; max-width: min(240px, 100%); }
 .cut-layout-controls select.is-forced { border-color: var(--amber); }
 .cut-layout-controls select:disabled { opacity: 0.5; }
 .cut-pick .tech-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; padding: 0; min-height: 96px; }
@@ -1432,11 +1433,11 @@ J.pool = (kind) => { const P = J.POOLS[J.lang] || J.POOLS.ja; return P[kind] || 
 const SERIF_KINDS = { mincho: 1, brush: 1, hand: 1 };
 const faceCache = new Map();
 /* the face a font key is drawn with in the current language: {family (quoted), weight, fb, gf, label, name (family, for captions)} */
-J.faceOf = (key) => {
+J.faceOf = (key, lang = J.lang) => {
   const f = J.FONTS[key] || J.FONTS.gothic_bold;
-  const L = J.LANG_FACES[J.lang];
+  const L = J.LANG_FACES[lang];
   if (!L || f.user) return f;                               // Japanese: the catalogue face itself (fontCSS runs per draw — no allocation)
-  const ck = J.lang + '|' + key; let r = faceCache.get(ck);
+  const ck = lang + '|' + key; let r = faceCache.get(ck);
   if (r) return r;
   const m = L.map[key], fb = (SERIF_KINDS[f.kind] ? L.fbSerif : L.fbSans) + ',' + f.fb;
   r = !m ? { family: f.family, weight: f.weight, fb, gf: f.gf, label: f.label, name: f.label, kind: f.kind }
@@ -4048,6 +4049,7 @@ J.plan = (project, audio) => {
       if (zones) splitCut(cut, halves, zones, st, dur, LS);
       // Apply a form without re-drawing random params or changing other cuts.
       if (J.applyLayoutForm) J.applyLayoutForm(cut, plan, tech.layoutForm);
+      if (J.applyLayoutFont) J.applyLayoutFont(cut, tech.layoutFont);
       // A per-cut position reset runs after layout generation, including locked and split cuts.
       if (tech.zeroOffset === layout) {
         for (const part of [cut, cut.companion].filter(Boolean)) {
@@ -58564,6 +58566,57 @@ J.applyLayoutForm = (cut, plan, choice) => {
 };
 })();
 
+/* JIZURA — per-cut layout fonts. Only named font parameters are editable:
+   values such as shape:'round' and anchor:'dot' are not font references. */
+(() => {
+'use strict';
+const fields = ('font fontBig fontSmall tileFont fontB fontC fontH fontL capFont fillFont bigFont sealFont markFont '
+  + 'rf fo fonts fb fs fc fr qf pen numFont hf df sf gf fm nf fontS hand').split(' ');
+const partsOf = cut => cut && cut.companion && typeof cut.companion === 'object' ? [cut, cut.companion] : cut ? [cut] : [];
+const validFont = key => typeof key === 'string' && Object.prototype.hasOwnProperty.call(J.FONTS, key);
+J.isLayoutFont = validFont;
+J.layoutFontParams = cut => {
+  const def = cut && J.LAYOUTS[cut.layout];
+  if (!def || def.special) return [];
+  const params = cut.params || {};
+  const names = def.fontParams || (cut.layout === 'typeSpecimen' ? fields.concat('main') : fields);
+  return names.filter(name => validFont(params[name]) || Array.isArray(params[name]) && params[name].some(validFont));
+};
+J.layoutFontState = (cut, lang = J.lang) => {
+  const keys = new Set(), labels = new Set();
+  let variable = false;
+  for (const part of partsOf(cut)) {
+    for (const field of J.layoutFontParams(part)) {
+      const value = part.params[field];
+      for (const key of (Array.isArray(value) ? value : [value]).filter(validFont)) {
+        keys.add(key);
+        if (part.weightGrow) {
+          variable = true;
+          labels.add(J.FONTS[key].kind === 'mincho' ? 'Noto Serif JP' : 'Noto Sans JP');
+        } else labels.add((J.faceOf ? J.faceOf(key, lang) : J.FONTS[key]).label);
+      }
+    }
+  }
+  return keys.size ? { keys: [...keys], labels: [...labels], variable } : null;
+};
+J.applyLayoutFont = (cut, key) => {
+  if (!validFont(key)) return;
+  for (const part of partsOf(cut)) {
+    const names = J.layoutFontParams(part);
+    if (!names.length) continue;
+    // Locked snapshots and repeated lyrics may share params. Never mutate them.
+    const params = Object.assign({}, part.params);
+    for (const name of names) {
+      const value = params[name];
+      params[name] = Array.isArray(value) ? value.map(v => validFont(v) ? key : v) : key;
+    }
+    part.params = params;
+    // Weight animation forces Noto Sans/Serif JP, which would hide this choice.
+    delete part.weightGrow;
+  }
+};
+})();
+
 /* ============================================================
    JIZURA — editor UI
    ============================================================ */
@@ -59174,6 +59227,61 @@ function updateLayoutFormSelect(group, cut) {
   select.classList.toggle('is-forced', !!manual);
   select.disabled = !state || k < 0 || !!S.exporting || !!S.tap || !manual && state.options.filter(o => o.enabled).length < 2;
 }
+function layoutFontCopy() {
+  const lang = (document.documentElement.lang || 'ja').toLowerCase().split('-')[0];
+  const code = (document.documentElement.lang || 'ja').toLowerCase();
+  const copy = {
+    ja: ['カットのフォント', '自動', '混植', 'このカットのレイアウトのフォントを統一します。手動選択時は太さを固定します', '太さアニメーション', 'フォントなし'],
+    en: ['Layout font', 'Auto', 'Mixed fonts', 'Use one font for this cut’s layout. Manual selection uses a fixed weight', 'Animated weight', 'No layout font'],
+    'zh-hans': ['布局字体', '自动', '混合字体', '统一当前镜头布局的字体，手动选择时固定字重', '字重渐变', '无布局字体'],
+    'zh-hant': ['版面字體', '自動', '混合字體', '統一目前片段版面的字體，手動選擇時固定字重', '字重漸變', '無版面字體'],
+    ko: ['레이아웃 글꼴', '자동', '혼합 글꼴', '이 컷의 레이아웃에 한 글꼴을 사용합니다. 수동 선택 시 굵기가 고정됩니다', '굵기 애니메이션', '레이아웃 글꼴 없음'],
+    id: ['Font tata letak', 'Otomatis', 'Campuran font', 'Gunakan satu font untuk tata letak potongan ini. Pilihan manual memakai ketebalan tetap', 'Animasi ketebalan', 'Tanpa font tata letak'],
+    vi: ['Phông bố cục', 'Tự động', 'Nhiều phông', 'Dùng một phông cho bố cục cảnh này. Chọn thủ công sẽ cố định độ đậm', 'Độ đậm động', 'Không có phông bố cục'],
+  };
+  return copy[code] || copy[lang] || copy.ja;
+}
+function changeCurrentLayoutFont(e) {
+  if (S.exporting || S.tap || cutPick.g !== 'layout') return;
+  const cut = J.cutAt(S.plan, S.t), k = lyricCutK(cut), value = e.target.value;
+  if (!cut || k < 0 || !J.layoutFontState(cut) || value && !J.isLayoutFont(value)) return;
+  if ((cutTechSlot(cut.line, k).layoutFont || '') === value) return;
+  const time = S.t;
+  remember();
+  setCutTech(cut.line, k, 'layoutFont', value);
+  replan(); commit(); flushSave(); seek(time);
+}
+function updateLayoutFontSelect(group, cut) {
+  let select = $('cutPickLayoutFont');
+  if (!select) {
+    const form = $('cutPickLayoutForm'); if (!form) return;
+    select = document.createElement('select'); select.id = 'cutPickLayoutFont';
+    select.addEventListener('change', changeCurrentLayoutFont);
+    form.insertAdjacentElement('beforebegin', select);
+  }
+  if (group !== 'layout') return;
+  // Thumbnails can temporarily change J.lang; labels belong to the active plan.
+  const lang = S.plan.lang, copy = layoutFontCopy(), state = J.layoutFontState(cut, lang), k = lyricCutK(cut);
+  const forced = cut && k >= 0 ? cutTechSlot(cut.line, k).layoutFont : '';
+  const manual = state && J.isLayoutFont(forced) && state.keys.every(key => key === forced);
+  const current = state ? (state.labels.length > 1 ? copy[2] : state.labels[0]) + (state.variable ? ' · ' + copy[4] : '') : copy[5];
+  select.setAttribute('aria-label', copy[0]);
+  select.title = copy[3] + (state ? '\n' + state.labels.join(' / ') + (state.variable ? ' · ' + copy[4] : '') : '');
+  select.replaceChildren();
+  const option = (value, label, title) => {
+    const item = document.createElement('option'); item.value = value; item.textContent = label;
+    if (title) item.title = title;
+    select.appendChild(item);
+  };
+  option('', manual ? copy[1] : copy[1] + ' · ' + current);
+  for (const [key, font] of Object.entries(J.FONTS)) {
+    const face = J.faceOf ? J.faceOf(key, lang) : font;
+    option(key, face.label, face.label === font.label ? '' : font.label);
+  }
+  select.value = manual ? forced : '';
+  select.classList.toggle('is-forced', !!manual);
+  select.disabled = !state || k < 0 || !!S.exporting || !!S.tap;
+}
 function rerollCurrentCut(kind) {
   if (S.exporting || S.tap) return;
   const cut = J.cutAt(S.plan, S.t);
@@ -59275,6 +59383,7 @@ function fillCutPick() {
   const cut = J.cutAt(S.plan, S.t);
   updateOffsetResetButton(g, cut);
   updateLayoutFormSelect(g, cut);
+  updateLayoutFontSelect(g, cut);
   $('cutPickTitle').textContent = (meta ? meta[2] : g) + (cut ? ' · #' + String(cut.index + 1).padStart(2, '0') : '');
   $('cutPickFilter').value = cutPick.filters[g] || '';
   const q = $('cutPickFilter').value.trim().toLowerCase();

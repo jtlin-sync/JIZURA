@@ -568,6 +568,7 @@ J.plan = (project, audio) => {
       if (zones) splitCut(cut, halves, zones, st, dur, LS);
       // Apply a form without re-drawing random params or changing other cuts.
       if (J.applyLayoutForm) J.applyLayoutForm(cut, plan, tech.layoutForm);
+      if (J.applyLayoutFont) J.applyLayoutFont(cut, tech.layoutFont);
       // A per-cut position reset runs after layout generation, including locked and split cuts.
       if (tech.zeroOffset === layout) {
         for (const part of [cut, cut.companion].filter(Boolean)) {

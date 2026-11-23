@@ -38,6 +38,14 @@ to the layout and return those additional parameter fields. This must not re-rol
 Manual choices live in `overrides[line].cutTech[k].layoutForm = { layout, value }`; they apply after generation and locked
 snapshots, to both halves of a split scene, without changing the random stream. Run `node tools/test_layout_forms.js`.
 
+The adjacent font selector stores a font key in `overrides[line].cutTech[k].layoutFont`. It replaces the layout's
+font parameters after planning, including both split halves and locked cuts, without changing the random stream.
+`src/11s_layout_fonts.js` lists the existing font parameter names; layouts with different names can declare
+`fontParams: ['headlineFace', 'captionFaces']` (each parameter is a font key or an array of keys). Never infer fonts
+from arbitrary string values: shapes such as `round` and `dot` share names with fonts. Style-role captions and
+decorations keep their own fonts. Manual font selection disables that cut's variable-weight effect so the selected
+face is used. Run `node tools/test_layout_fonts.js`.
+
 ## Design space & environment
 
 Design size by aspect: 16:9 1920×1080 · 9:16 1080×1920 · 4:3 1440×1080 · 3:4 1080×1440 · 1:1 1440×1440 · 4:5 1440×1800 · 21:9 2520×1080.
